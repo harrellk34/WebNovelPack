@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="WebNovelPack.App/WebNovelPack.App.csproj" />
+  <Project Path="WebNovelPack.Core/WebNovelPack.Core.csproj" />
+  <Project Path="WebNovelPack.Tests/WebNovelPack.Tests.csproj" />
+</Solution>
