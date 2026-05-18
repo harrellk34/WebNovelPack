@@ -1,9 +1,23 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="WebNovelPack.App.MainWindow"
-        Title="WebNovelPack.App">
-    Welcome to Avalonia!
+        Title="WebNovelPack"
+        Width="900"
+        Height="600">
+
+    <Grid RowDefinitions="Auto,*" Margin="16">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
+            <Button Name="ImportFolderButton"
+                    Content="Import Chapter Folder"
+                    Click="ImportFolderButton_Click" />
+
+            <TextBlock Name="StatusText"
+                       VerticalAlignment="Center"
+                       Text="No folder imported yet." />
+        </StackPanel>
+
+        <ListBox Name="ChapterList"
+                 Grid.Row="1"
+                 Margin="0,16,0,0" />
+    </Grid>
 </Window>
