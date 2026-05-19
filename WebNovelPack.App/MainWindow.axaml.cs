@@ -38,18 +38,26 @@ public partial class MainWindow : Window
 
         try
         {
-            var project = _chapterImportService.ImportFolder(folderPath);
+            var result = _chapterImportService.ImportFolderWithResult(folderPath);
+            var project = result.Project;
 
             ChapterList.ItemsSource = project.Chapters
                 .OrderBy(chapter => chapter.Order)
                 .Select(chapter => $"{chapter.Order}. {chapter.Title}")
                 .ToList();
 
-            StatusText.Text = $"Imported {project.Chapters.Count} chapter(s).";
+            WarningsList.ItemsSource = result.Warnings
+                .Select(warning => warning.SourcePath is null
+                    ? warning.Message
+                    : $"{warning.Message} ({System.IO.Path.GetFileName(warning.SourcePath)})")
+                .ToList();
+
+            StatusText.Text = $"Imported {project.Chapters.Count} chapter(s), {result.Warnings.Count} warning(s).";
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Import failed: {ex.Message}";
+            WarningsList.ItemsSource = null;
         }
     }
 }

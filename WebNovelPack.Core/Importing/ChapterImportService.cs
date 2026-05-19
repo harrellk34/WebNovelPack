@@ -7,6 +7,10 @@ namespace WebNovelPack.Core.Importing;
 
 public sealed class ChapterImportService
 {
+    private const int ShortContentThreshold = 80;
+    private const string ContentCleanupXPath = "//script|//style|//nav|//footer|//header";
+    private const string ExtraCleanupXPath = "//form|//button|//noscript";
+
     private static readonly string[] SupportedExtensions =
     [
         ".txt",
@@ -18,6 +22,11 @@ public sealed class ChapterImportService
 
     public BookProject ImportFolder(string folderPath)
     {
+        return ImportFolderWithResult(folderPath).Project;
+    }
+
+    public ImportResult ImportFolderWithResult(string folderPath)
+    {
         if (string.IsNullOrWhiteSpace(folderPath))
         {
             throw new ArgumentException("Folder path cannot be empty.", nameof(folderPath));
@@ -28,20 +37,52 @@ public sealed class ChapterImportService
             throw new DirectoryNotFoundException($"Folder does not exist: {folderPath}");
         }
 
-        var files = Directory
+        var allFiles = Directory
             .EnumerateFiles(folderPath)
-            .Where(IsSupportedFile)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var files = allFiles
+            .Where(IsSupportedFile)
+            .ToList();
+
+        var skippedFiles = allFiles
+            .Where(path => !IsSupportedFile(path))
+            .ToList();
+
         var project = new BookProject();
+        var warnings = new List<ImportWarning>();
+
+        foreach (string skippedFile in skippedFiles)
+        {
+            warnings.Add(new ImportWarning
+            {
+                Message = "Unsupported file was skipped.",
+                SourcePath = skippedFile
+            });
+        }
+
+        if (files.Count == 0)
+        {
+            warnings.Add(new ImportWarning
+            {
+                Message = "No supported chapter files found.",
+                SourcePath = folderPath
+            });
+        }
 
         for (int i = 0; i < files.Count; i++)
         {
-            project.Chapters.Add(ImportChapter(files[i], i + 1));
+            project.Chapters.Add(ImportChapter(files[i], i + 1, warnings));
         }
 
-        return project;
+        return new ImportResult
+        {
+            Project = project,
+            Warnings = warnings,
+            SupportedFileCount = files.Count,
+            SkippedFileCount = skippedFiles.Count
+        };
     }
 
     private static bool IsSupportedFile(string path)
@@ -50,30 +91,48 @@ public sealed class ChapterImportService
         return SupportedExtensions.Contains(extension);
     }
 
-    private static Chapter ImportChapter(string path, int order)
+    private static Chapter ImportChapter(string path, int order, List<ImportWarning> warnings)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
         string rawText = File.ReadAllText(path);
 
-        string title = DetectTitle(rawText, path, extension);
+        var titleResult = DetectTitle(rawText, path, extension);
         string htmlBody = extension switch
         {
             ".txt" => PlainTextToHtml(rawText),
             ".md" or ".markdown" => Markdown.ToHtml(rawText),
-            ".html" or ".htm" => ExtractReadableHtml(rawText),
+            ".html" or ".htm" => ExtractReadableHtml(rawText, path, warnings),
             _ => PlainTextToHtml(rawText)
         };
 
+        if (GetReadableTextLength(rawText, extension) < ShortContentThreshold)
+        {
+            warnings.Add(new ImportWarning
+            {
+                Message = "Imported chapter has very short content.",
+                SourcePath = path
+            });
+        }
+
+        if (titleResult.UsedFilename)
+        {
+            warnings.Add(new ImportWarning
+            {
+                Message = "Imported chapter has no clear title; used the filename.",
+                SourcePath = path
+            });
+        }
+
         return new Chapter
         {
-            Title = title,
+            Title = titleResult.Title,
             SourcePath = path,
             HtmlBody = htmlBody,
             Order = order
         };
     }
 
-    private static string DetectTitle(string rawText, string path, string extension)
+    private static TitleDetectionResult DetectTitle(string rawText, string path, string extension)
     {
         if (extension is ".html" or ".htm")
         {
@@ -86,7 +145,7 @@ public sealed class ChapterImportService
 
             if (!string.IsNullOrWhiteSpace(heading))
             {
-                return NormalizeWhitespace(WebUtility.HtmlDecode(heading));
+                return new TitleDetectionResult(NormalizeWhitespace(WebUtility.HtmlDecode(heading)), false);
             }
         }
 
@@ -97,10 +156,10 @@ public sealed class ChapterImportService
 
         if (!string.IsNullOrWhiteSpace(firstMeaningfulLine) && firstMeaningfulLine.Length <= 120)
         {
-            return NormalizeWhitespace(firstMeaningfulLine);
+            return new TitleDetectionResult(NormalizeWhitespace(firstMeaningfulLine), false);
         }
 
-        return Path.GetFileNameWithoutExtension(path);
+        return new TitleDetectionResult(Path.GetFileNameWithoutExtension(path), true);
     }
 
     private static string PlainTextToHtml(string text)
@@ -114,33 +173,50 @@ public sealed class ChapterImportService
         return string.Join(Environment.NewLine, paragraphs);
     }
 
-    private static string ExtractReadableHtml(string html)
+    private static string ExtractReadableHtml(string html, string path, List<ImportWarning> warnings)
     {
         var document = new HtmlDocument();
         document.LoadHtml(html);
 
-        RemoveNodes(document, "//script|//style|//nav|//footer|//header|//form|//button|//noscript");
+        int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
+        RemoveNodes(document, ExtraCleanupXPath);
 
         HtmlNode? bestNode = FindBestContentNode(document);
 
         string cleaned = bestNode?.InnerHtml ?? document.DocumentNode.InnerHtml;
 
-        return NormalizeHtmlFragment(cleaned);
+        var normalized = NormalizeHtmlFragment(cleaned);
+        removedNodeCount += normalized.RemovedNodeCount;
+
+        if (removedNodeCount > 0)
+        {
+            warnings.Add(new ImportWarning
+            {
+                Message = "HTML chapter had navigation/script/style/header/footer nodes removed.",
+                SourcePath = path
+            });
+        }
+
+        return normalized.Html;
     }
 
-    private static void RemoveNodes(HtmlDocument document, string xpath)
+    private static int RemoveNodes(HtmlDocument document, string xpath)
     {
         var nodes = document.DocumentNode.SelectNodes(xpath);
 
         if (nodes is null)
         {
-            return;
+            return 0;
         }
+
+        int count = nodes.Count;
 
         foreach (var node in nodes.ToList())
         {
             node.Remove();
         }
+
+        return count;
     }
 
     private static HtmlNode? FindBestContentNode(HtmlDocument document)
@@ -168,18 +244,39 @@ public sealed class ChapterImportService
         return textLength + (paragraphCount * 100) + (headingCount * 50) - (linkCount * 25);
     }
 
-    private static string NormalizeHtmlFragment(string html)
+    private static HtmlExtractionResult NormalizeHtmlFragment(string html)
     {
         var document = new HtmlDocument();
         document.LoadHtml(html);
 
-        RemoveNodes(document, "//script|//style|//nav|//footer|//header|//form|//button|//noscript");
+        int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
+        RemoveNodes(document, ExtraCleanupXPath);
 
-        return document.DocumentNode.InnerHtml.Trim();
+        return new HtmlExtractionResult(document.DocumentNode.InnerHtml.Trim(), removedNodeCount);
     }
 
     private static string NormalizeWhitespace(string value)
     {
         return string.Join(" ", value.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
     }
+
+    private static int GetReadableTextLength(string rawText, string extension)
+    {
+        if (extension is ".html" or ".htm")
+        {
+            var document = new HtmlDocument();
+            document.LoadHtml(rawText);
+
+            RemoveNodes(document, ContentCleanupXPath);
+            RemoveNodes(document, ExtraCleanupXPath);
+
+            return NormalizeWhitespace(WebUtility.HtmlDecode(document.DocumentNode.InnerText)).Length;
+        }
+
+        return NormalizeWhitespace(rawText).Length;
+    }
+
+    private sealed record TitleDetectionResult(string Title, bool UsedFilename);
+
+    private sealed record HtmlExtractionResult(string Html, int RemovedNodeCount);
 }
