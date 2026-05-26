@@ -52,7 +52,7 @@ public partial class MainWindow : Window
                     : $"{warning.Message} ({System.IO.Path.GetFileName(warning.SourcePath)})")
                 .ToList();
 
-            StatusText.Text = $"Imported {project.Chapters.Count} chapter(s), {result.Warnings.Count} warning(s).";
+            StatusText.Text = $"Discovered {result.Report.TotalFilesDiscovered} file(s); imported {result.Report.SuccessfullyProcessed}; skipped {result.Report.SkippedCount}.";
         }
         catch (Exception ex)
         {

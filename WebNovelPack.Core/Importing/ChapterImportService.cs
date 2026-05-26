@@ -42,47 +42,122 @@ public sealed class ChapterImportService
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var files = allFiles
-            .Where(IsSupportedFile)
-            .ToList();
+        return ImportFilesWithResult(allFiles, folderPath);
+    }
 
-        var skippedFiles = allFiles
-            .Where(path => !IsSupportedFile(path))
-            .ToList();
+    public ImportResult ImportFilesWithResult(IEnumerable<string> filePaths)
+    {
+        ArgumentNullException.ThrowIfNull(filePaths);
 
+        return ImportFilesWithResult(filePaths, null);
+    }
+
+    private ImportResult ImportFilesWithResult(IEnumerable<string> filePaths, string? noProcessedFilesSourcePath)
+    {
+        var files = filePaths.ToList();
+        int supportedFileCount = files.Count(IsSupportedFile);
         var project = new BookProject();
         var warnings = new List<ImportWarning>();
+        var report = new PackagingReport
+        {
+            TotalFilesDiscovered = files.Count
+        };
+        var processedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string skippedFile in skippedFiles)
+        foreach (string file in files)
+        {
+            var validation = ValidateFile(file, processedFileNames);
+
+            if (!validation.IsValid)
+            {
+                AddSkippedFile(report, warnings, file, validation.Reason!);
+                continue;
+            }
+
+            try
+            {
+                project.Chapters.Add(ImportChapter(file, project.Chapters.Count + 1, validation.RawText!, warnings));
+                processedFileNames.Add(Path.GetFileName(file));
+                report.SuccessfullyProcessed++;
+            }
+            catch (Exception ex)
+            {
+                AddSkippedFile(report, warnings, file, $"File could not be processed: {ex.Message}");
+            }
+        }
+
+        if (report.SuccessfullyProcessed == 0)
         {
             warnings.Add(new ImportWarning
             {
-                Message = "Unsupported file was skipped.",
-                SourcePath = skippedFile
+                Message = supportedFileCount == 0
+                    ? "No supported chapter files found."
+                    : "No valid chapter files were processed.",
+                SourcePath = noProcessedFilesSourcePath
             });
-        }
-
-        if (files.Count == 0)
-        {
-            warnings.Add(new ImportWarning
-            {
-                Message = "No supported chapter files found.",
-                SourcePath = folderPath
-            });
-        }
-
-        for (int i = 0; i < files.Count; i++)
-        {
-            project.Chapters.Add(ImportChapter(files[i], i + 1, warnings));
         }
 
         return new ImportResult
         {
             Project = project,
             Warnings = warnings,
-            SupportedFileCount = files.Count,
-            SkippedFileCount = skippedFiles.Count
+            Report = report,
+            SupportedFileCount = supportedFileCount,
+            SkippedFileCount = report.SkippedCount
         };
+    }
+
+    private static FileValidationResult ValidateFile(string path, HashSet<string> processedFileNames)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return FileValidationResult.Invalid("File does not exist.");
+        }
+
+        if (!IsSupportedFile(path))
+        {
+            return FileValidationResult.Invalid("Unsupported file extension.");
+        }
+
+        if (processedFileNames.Contains(Path.GetFileName(path)))
+        {
+            return FileValidationResult.Invalid("Duplicate file name.");
+        }
+
+        try
+        {
+            string rawText = File.ReadAllText(path);
+
+            if (string.IsNullOrWhiteSpace(rawText))
+            {
+                return FileValidationResult.Invalid("File is empty or contains only whitespace.");
+            }
+
+            return FileValidationResult.Valid(rawText);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or System.Security.SecurityException)
+        {
+            return FileValidationResult.Invalid($"File could not be read: {ex.Message}");
+        }
+    }
+
+    private static void AddSkippedFile(
+        PackagingReport report,
+        List<ImportWarning> warnings,
+        string path,
+        string reason)
+    {
+        report.SkippedFiles.Add(new SkippedFileReport
+        {
+            SourcePath = path,
+            Reason = reason
+        });
+
+        warnings.Add(new ImportWarning
+        {
+            Message = $"File skipped: {reason}",
+            SourcePath = path
+        });
     }
 
     private static bool IsSupportedFile(string path)
@@ -91,10 +166,9 @@ public sealed class ChapterImportService
         return SupportedExtensions.Contains(extension);
     }
 
-    private static Chapter ImportChapter(string path, int order, List<ImportWarning> warnings)
+    private static Chapter ImportChapter(string path, int order, string rawText, List<ImportWarning> warnings)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
-        string rawText = File.ReadAllText(path);
 
         var titleResult = DetectTitle(rawText, path, extension);
         string htmlBody = extension switch
@@ -279,4 +353,11 @@ public sealed class ChapterImportService
     private sealed record TitleDetectionResult(string Title, bool UsedFilename);
 
     private sealed record HtmlExtractionResult(string Html, int RemovedNodeCount);
+
+    private sealed record FileValidationResult(bool IsValid, string? RawText, string? Reason)
+    {
+        public static FileValidationResult Valid(string rawText) => new(true, rawText, null);
+
+        public static FileValidationResult Invalid(string reason) => new(false, null, reason);
+    }
 }
