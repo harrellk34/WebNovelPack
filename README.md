@@ -1,26 +1,32 @@
 # WebNovelPack
 
-WebNovelPack is an offline desktop app for turning folders of plain text, HTML, or Markdown chapters into a single EPUB.
+WebNovelPack is a C#/.NET desktop app for turning a folder of story chapters into a single EPUB file.
 
-It is designed for webnovels, serial fiction, fan writing, documentation, and long article collections where each chapter exists as a separate file. The app focuses on chapter ordering, cleanup, metadata editing, validation warnings, and Kindle-friendly EPUB export.
+The goal is to make it easier to package web novels, serial fiction, fan writing, or long article collections when each chapter is saved as a separate `.txt`, `.md`, or `.html` file.
 
 ## Current Status
 
-Early development.
+This project is still in early development.
 
-Current functionality:
-- C#/.NET solution setup
-- Avalonia desktop app project
-- Core library project
-- Test project
-- Planned chapter import pipeline for `.txt`, `.md`, and `.html` files
+Current features:
+- Avalonia desktop app setup
+- Core library and test project setup
+- Basic chapter import for `.txt`, `.md`, and `.html` files
+- Import validation for missing, empty, unsupported, unreadable, or duplicate files
+- Import report showing processed and skipped files
+- Basic UI feedback for import results
+- xUnit tests for the import/validation workflow
 
 ## Planned Features
 
-- Import a folder of chapter files
 - Sort chapters by filename
 - Detect chapter titles
-- Convert TXT/Markdown/HTML into clean chapter HTML
+- Clean up imported text/HTML
 - Edit and reorder chapters
 - Add book metadata
-- Export a single EPUB
+- Export chapters as a single EPUB
+- Improve error messages and validation reports
+
+## Notes
+
+Right now the app can import and validate chapter files, but EPUB export is not finished yet.
