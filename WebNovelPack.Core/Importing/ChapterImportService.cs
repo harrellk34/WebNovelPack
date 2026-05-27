@@ -253,6 +253,7 @@ public sealed class ChapterImportService
         document.LoadHtml(html);
 
         int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
+        var sanitization = HtmlChapterSanitizer.Sanitize(document);
         RemoveNodes(document, ExtraCleanupXPath);
 
         HtmlNode? bestNode = FindBestContentNode(document);
@@ -261,6 +262,7 @@ public sealed class ChapterImportService
 
         var normalized = NormalizeHtmlFragment(cleaned);
         removedNodeCount += normalized.RemovedNodeCount;
+        removedNodeCount += sanitization.TotalRemoved;
 
         if (removedNodeCount > 0)
         {
@@ -324,9 +326,10 @@ public sealed class ChapterImportService
         document.LoadHtml(html);
 
         int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
+        var sanitization = HtmlChapterSanitizer.Sanitize(document);
         RemoveNodes(document, ExtraCleanupXPath);
 
-        return new HtmlExtractionResult(document.DocumentNode.InnerHtml.Trim(), removedNodeCount);
+        return new HtmlExtractionResult(document.DocumentNode.InnerHtml.Trim(), removedNodeCount + sanitization.TotalRemoved);
     }
 
     private static string NormalizeWhitespace(string value)
@@ -342,6 +345,7 @@ public sealed class ChapterImportService
             document.LoadHtml(rawText);
 
             RemoveNodes(document, ContentCleanupXPath);
+            HtmlChapterSanitizer.Sanitize(document);
             RemoveNodes(document, ExtraCleanupXPath);
 
             return NormalizeWhitespace(WebUtility.HtmlDecode(document.DocumentNode.InnerText)).Length;

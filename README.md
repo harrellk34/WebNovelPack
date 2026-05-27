@@ -16,12 +16,12 @@ Current features:
 - Import report showing processed and skipped files
 - Basic UI feedback for import results
 - xUnit tests for the import/validation workflow
+- HTML sanitization for imported chapter files
 
 ## Planned Features
 
 - Sort chapters by filename
 - Detect chapter titles
-- Clean up imported text/HTML
 - Edit and reorder chapters
 - Add book metadata
 - Export chapters as a single EPUB

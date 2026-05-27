@@ -242,4 +242,164 @@ public sealed class ChapterImportServiceTests
             Directory.Delete(tempFolder, recursive: true);
         }
     }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRemoveScriptTagsFromHtmlImports()
+    {
+        string htmlBody = ImportSingleChapterBody(
+            ".html",
+            """
+            <main>
+                <h1>Chapter One</h1>
+                <p>The chapter text remains.</p>
+                <script>alert('unsafe');</script>
+            </main>
+            """
+        );
+
+        Assert.Contains("The chapter text remains.", htmlBody);
+        Assert.DoesNotContain("<script", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert('unsafe')", htmlBody);
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRemoveEmbeddedHtmlContent()
+    {
+        string htmlBody = ImportSingleChapterBody(
+            ".html",
+            """
+            <main>
+                <h1>Chapter One</h1>
+                <p>Only the story should remain.</p>
+                <iframe src="https://example.com/embed">frame text</iframe>
+                <embed src="clip.swf">
+                <object data="clip.swf">object text</object>
+                <style>p { display: none; }</style>
+            </main>
+            """
+        );
+
+        Assert.Contains("Only the story should remain.", htmlBody);
+        Assert.DoesNotContain("<iframe", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<embed", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<object", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<style", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("frame text", htmlBody);
+        Assert.DoesNotContain("object text", htmlBody);
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRemoveUnsafeHtmlAttributes()
+    {
+        string htmlBody = ImportSingleChapterBody(
+            ".html",
+            """
+            <main>
+                <h1 onmouseover="hover()">Chapter One</h1>
+                <p onclick="openDoor()" onerror="fail()" onload="ready()" style="color:red" srcdoc="<p>bad</p>">
+                    The paragraph stays readable.
+                </p>
+            </main>
+            """
+        );
+
+        Assert.Contains("The paragraph stays readable.", htmlBody);
+        Assert.DoesNotContain("onclick", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onload", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onmouseover", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("style=", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("srcdoc", htmlBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldPreserveNormalHtmlReadingContent()
+    {
+        string htmlBody = ImportSingleChapterBody(
+            ".html",
+            """
+            <main>
+                <h1>Chapter One</h1>
+                <p>The <strong>chapter</strong> keeps <em>emphasis</em><br>and breaks.</p>
+                <blockquote>A quoted line.</blockquote>
+                <ol><li>First step</li></ol>
+                <ul><li>Second step</li></ul>
+                <p><a href="https://example.com">Source</a></p>
+            </main>
+            """
+        );
+
+        Assert.Contains("<h1>Chapter One</h1>", htmlBody);
+        Assert.Contains("<p>The <strong>chapter</strong> keeps <em>emphasis</em><br>and breaks.</p>", htmlBody);
+        Assert.Contains("<blockquote>A quoted line.</blockquote>", htmlBody);
+        Assert.Contains("<ol><li>First step</li></ol>", htmlBody);
+        Assert.Contains("<ul><li>Second step</li></ul>", htmlBody);
+        Assert.Contains("""<a href="https://example.com">Source</a>""", htmlBody);
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRemoveUnsafeJavascriptLinksFromHtmlImports()
+    {
+        string htmlBody = ImportSingleChapterBody(
+            ".html",
+            """
+            <main>
+                <h1>Chapter One</h1>
+                <p><a href="javascript:alert('unsafe')">Bad link</a></p>
+                <p><a href="https://example.com/story">Good link</a></p>
+            </main>
+            """
+        );
+
+        Assert.Contains(">Bad link</a>", htmlBody);
+        Assert.DoesNotContain("javascript:", htmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("""<a href="https://example.com/story">Good link</a>""", htmlBody);
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldNotApplyHtmlSanitizationToTxtOrMarkdownImports()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string txtPath = Path.Combine(tempFolder, "001.txt");
+            string mdPath = Path.Combine(tempFolder, "002.md");
+
+            File.WriteAllText(txtPath, "Chapter One\n\n<script>alert('kept as text');</script>");
+            File.WriteAllText(mdPath, "<p onclick=\"read()\">Markdown raw HTML keeps existing behavior.</p>");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([txtPath, mdPath]);
+
+            Assert.Contains("&lt;script&gt;alert(&#39;kept as text&#39;);&lt;/script&gt;", result.Project.Chapters[0].HtmlBody);
+            Assert.Contains("onclick=\"read()\"", result.Project.Chapters[1].HtmlBody);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    private static string ImportSingleChapterBody(string extension, string content)
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, $"001{extension}");
+            File.WriteAllText(filePath, content);
+
+            var service = new ChapterImportService();
+
+            return service.ImportFilesWithResult([filePath]).Project.Chapters.Single().HtmlBody;
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
 }
