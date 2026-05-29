@@ -17,6 +17,7 @@ Current features:
 - Basic UI feedback for import results
 - xUnit tests for the import/validation workflow
 - HTML sanitization for imported chapter files
+- Safe EPUB output path validation for future export support
 
 ## Planned Features
 
