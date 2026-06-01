@@ -58,11 +58,18 @@ public sealed class ChapterImportService
         int supportedFileCount = files.Count(IsSupportedFile);
         var project = new BookProject();
         var warnings = new List<ImportWarning>();
+        var auditLog = new List<ImportAuditEvent>();
         var report = new PackagingReport
         {
             TotalFilesDiscovered = files.Count
         };
         var processedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        AddAuditEvent(
+            auditLog,
+            ImportAuditEventType.ImportStarted,
+            ImportAuditSeverity.Info,
+            $"Import started for {files.Count} file(s).");
 
         foreach (string file in files)
         {
@@ -70,19 +77,46 @@ public sealed class ChapterImportService
 
             if (!validation.IsValid)
             {
-                AddSkippedFile(report, warnings, file, validation.Reason!);
+                AddAuditEvent(
+                    auditLog,
+                    ImportAuditEventType.FileValidated,
+                    ImportAuditSeverity.Warning,
+                    $"File validation failed: {validation.Reason}",
+                    file);
+
+                AddSkippedFile(report, warnings, auditLog, file, validation.Reason!, ImportAuditSeverity.Warning);
                 continue;
             }
 
+            AddAuditEvent(
+                auditLog,
+                ImportAuditEventType.FileValidated,
+                ImportAuditSeverity.Info,
+                "File validated successfully.",
+                file);
+
             try
             {
-                project.Chapters.Add(ImportChapter(file, project.Chapters.Count + 1, validation.RawText!, warnings));
+                project.Chapters.Add(ImportChapter(file, project.Chapters.Count + 1, validation.RawText!, warnings, auditLog));
                 processedFileNames.Add(Path.GetFileName(file));
                 report.SuccessfullyProcessed++;
+
+                AddAuditEvent(
+                    auditLog,
+                    ImportAuditEventType.ChapterImported,
+                    ImportAuditSeverity.Info,
+                    "Chapter imported successfully.",
+                    file);
             }
             catch (Exception ex)
             {
-                AddSkippedFile(report, warnings, file, $"File could not be processed: {ex.Message}");
+                AddSkippedFile(
+                    report,
+                    warnings,
+                    auditLog,
+                    file,
+                    $"File could not be processed: {ex.Message}",
+                    ImportAuditSeverity.Error);
             }
         }
 
@@ -97,11 +131,18 @@ public sealed class ChapterImportService
             });
         }
 
+        AddAuditEvent(
+            auditLog,
+            ImportAuditEventType.ImportCompleted,
+            ImportAuditSeverity.Info,
+            $"Import completed with {report.SuccessfullyProcessed} imported and {report.SkippedCount} skipped file(s).");
+
         return new ImportResult
         {
             Project = project,
             Warnings = warnings,
             Report = report,
+            AuditLog = auditLog,
             SupportedFileCount = supportedFileCount,
             SkippedFileCount = report.SkippedCount
         };
@@ -144,8 +185,10 @@ public sealed class ChapterImportService
     private static void AddSkippedFile(
         PackagingReport report,
         List<ImportWarning> warnings,
+        List<ImportAuditEvent> auditLog,
         string path,
-        string reason)
+        string reason,
+        ImportAuditSeverity severity)
     {
         report.SkippedFiles.Add(new SkippedFileReport
         {
@@ -158,6 +201,13 @@ public sealed class ChapterImportService
             Message = $"File skipped: {reason}",
             SourcePath = path
         });
+
+        AddAuditEvent(
+            auditLog,
+            ImportAuditEventType.FileSkipped,
+            severity,
+            $"File skipped: {reason}",
+            path);
     }
 
     private static bool IsSupportedFile(string path)
@@ -166,7 +216,12 @@ public sealed class ChapterImportService
         return SupportedExtensions.Contains(extension);
     }
 
-    private static Chapter ImportChapter(string path, int order, string rawText, List<ImportWarning> warnings)
+    private static Chapter ImportChapter(
+        string path,
+        int order,
+        string rawText,
+        List<ImportWarning> warnings,
+        List<ImportAuditEvent> auditLog)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
 
@@ -175,7 +230,7 @@ public sealed class ChapterImportService
         {
             ".txt" => PlainTextToHtml(rawText),
             ".md" or ".markdown" => Markdown.ToHtml(rawText),
-            ".html" or ".htm" => ExtractReadableHtml(rawText, path, warnings),
+            ".html" or ".htm" => ExtractReadableHtml(rawText, path, warnings, auditLog),
             _ => PlainTextToHtml(rawText)
         };
 
@@ -247,7 +302,11 @@ public sealed class ChapterImportService
         return string.Join(Environment.NewLine, paragraphs);
     }
 
-    private static string ExtractReadableHtml(string html, string path, List<ImportWarning> warnings)
+    private static string ExtractReadableHtml(
+        string html,
+        string path,
+        List<ImportWarning> warnings,
+        List<ImportAuditEvent> auditLog)
     {
         var document = new HtmlDocument();
         document.LoadHtml(html);
@@ -264,6 +323,15 @@ public sealed class ChapterImportService
         removedNodeCount += normalized.RemovedNodeCount;
         removedNodeCount += sanitization.TotalRemoved;
 
+        AddAuditEvent(
+            auditLog,
+            ImportAuditEventType.HtmlSanitized,
+            ImportAuditSeverity.Info,
+            removedNodeCount > 0
+                ? $"HTML sanitized; removed {removedNodeCount} unsafe or non-reading item(s)."
+                : "HTML sanitized; no unsafe or non-reading items were removed.",
+            path);
+
         if (removedNodeCount > 0)
         {
             warnings.Add(new ImportWarning
@@ -274,6 +342,23 @@ public sealed class ChapterImportService
         }
 
         return normalized.Html;
+    }
+
+    private static void AddAuditEvent(
+        List<ImportAuditEvent> auditLog,
+        ImportAuditEventType eventType,
+        ImportAuditSeverity severity,
+        string message,
+        string? sourcePath = null)
+    {
+        auditLog.Add(new ImportAuditEvent
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            EventType = eventType,
+            Severity = severity,
+            Message = message,
+            SourcePath = sourcePath
+        });
     }
 
     private static int RemoveNodes(HtmlDocument document, string xpath)

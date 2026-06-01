@@ -1,4 +1,5 @@
 using WebNovelPack.Core.Importing;
+using WebNovelPack.Core.Models;
 
 namespace WebNovelPack.Tests;
 
@@ -161,6 +162,159 @@ public sealed class ChapterImportServiceTests
             Assert.Equal(2, result.Report.SkippedCount);
             Assert.Contains(result.Report.SkippedFiles, skipped => skipped.FileName == "002.txt");
             Assert.Contains(result.Report.SkippedFiles, skipped => skipped.FileName == "notes.csv");
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRecordImportStartedAndCompletedAuditEvents()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, "001.txt");
+            File.WriteAllText(filePath, "Chapter One\n\nThis is a complete enough chapter for import.");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([filePath]);
+
+            Assert.Equal(ImportAuditEventType.ImportStarted, result.AuditLog.First().EventType);
+            Assert.Equal(ImportAuditSeverity.Info, result.AuditLog.First().Severity);
+            Assert.Equal(ImportAuditEventType.ImportCompleted, result.AuditLog.Last().EventType);
+            Assert.Equal(ImportAuditSeverity.Info, result.AuditLog.Last().Severity);
+            Assert.All(result.AuditLog, auditEvent => Assert.NotEqual(default, auditEvent.Timestamp));
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFolderWithResult_ShouldRecordWarningAuditEventForSkippedFiles()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempFolder, "001.txt"), "Chapter One\n\nThis chapter should import cleanly.");
+            File.WriteAllText(Path.Combine(tempFolder, "cover.jpg"), "not a chapter");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFolderWithResult(tempFolder);
+
+            var skippedEvent = Assert.Single(
+                result.AuditLog,
+                auditEvent => auditEvent.EventType == ImportAuditEventType.FileSkipped);
+            Assert.Equal(ImportAuditSeverity.Warning, skippedEvent.Severity);
+            Assert.Equal("cover.jpg", skippedEvent.FileName);
+            Assert.Contains("Unsupported file extension", skippedEvent.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRecordInfoAuditEventForSuccessfulImports()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, "001.txt");
+            File.WriteAllText(filePath, "Chapter One\n\nThis chapter should import cleanly.");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([filePath]);
+
+            var importedEvent = Assert.Single(
+                result.AuditLog,
+                auditEvent => auditEvent.EventType == ImportAuditEventType.ChapterImported);
+            Assert.Equal(ImportAuditSeverity.Info, importedEvent.Severity);
+            Assert.Equal("001.txt", importedEvent.FileName);
+            Assert.Contains("imported", importedEvent.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldRecordHtmlSanitizationAuditEvent()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, "001.html");
+            File.WriteAllText(
+                filePath,
+                """
+                <main>
+                    <h1>Chapter One</h1>
+                    <p>The chapter text remains.</p>
+                    <script>alert('unsafe');</script>
+                </main>
+                """);
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([filePath]);
+
+            var sanitizedEvent = Assert.Single(
+                result.AuditLog,
+                auditEvent => auditEvent.EventType == ImportAuditEventType.HtmlSanitized);
+            Assert.Equal(ImportAuditSeverity.Info, sanitizedEvent.Severity);
+            Assert.Equal("001.html", sanitizedEvent.FileName);
+            Assert.Contains("HTML sanitized", sanitizedEvent.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFolderWithResult_ShouldRecordUsefulAuditTrailForMixedImports()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempFolder, "001.txt"), "Chapter One\n\nThis is a valid chapter body for an imported story.");
+            File.WriteAllText(Path.Combine(tempFolder, "002.txt"), "");
+            File.WriteAllText(Path.Combine(tempFolder, "003.html"), "<main><h1>Chapter Three</h1><p>HTML chapter.</p><script>bad()</script></main>");
+            File.WriteAllText(Path.Combine(tempFolder, "notes.csv"), "not a chapter");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFolderWithResult(tempFolder);
+
+            Assert.Equal(2, result.Project.Chapters.Count);
+            Assert.Equal(2, result.Report.SkippedCount);
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.ImportStarted);
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.FileValidated && auditEvent.FileName == "001.txt" && auditEvent.Severity == ImportAuditSeverity.Info);
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.FileSkipped && auditEvent.FileName == "002.txt" && auditEvent.Severity == ImportAuditSeverity.Warning);
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.FileSkipped && auditEvent.FileName == "notes.csv" && auditEvent.Severity == ImportAuditSeverity.Warning);
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.ChapterImported && auditEvent.FileName == "003.html");
+            Assert.Contains(result.AuditLog, auditEvent => auditEvent.EventType == ImportAuditEventType.HtmlSanitized && auditEvent.FileName == "003.html");
+            Assert.Equal(ImportAuditEventType.ImportCompleted, result.AuditLog.Last().EventType);
+            Assert.Contains("2 imported and 2 skipped", result.AuditLog.Last().Message);
         }
         finally
         {
