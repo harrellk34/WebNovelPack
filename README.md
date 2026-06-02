@@ -14,10 +14,11 @@ Current features:
 - Basic chapter import for `.txt`, `.md`, and `.html` files
 - Import validation for missing, empty, unsupported, unreadable, or duplicate files
 - Import report showing processed and skipped files
+- Import audit log for traceability
 - Basic UI feedback for import results
-- xUnit tests for the import/validation workflow
 - HTML sanitization for imported chapter files
 - Safe EPUB output path validation for future export support
+- xUnit tests for import, validation, sanitization, audit logging, and output path handling
 
 ## Planned Features
 
