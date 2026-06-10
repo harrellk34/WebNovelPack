@@ -5,6 +5,7 @@ public enum ImportAuditEventType
     ImportStarted,
     FileValidated,
     FileSkipped,
+    ChapterTitleDetected,
     ChapterImported,
     HtmlSanitized,
     ImportCompleted,

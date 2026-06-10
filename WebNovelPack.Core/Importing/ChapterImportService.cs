@@ -37,10 +37,7 @@ public sealed class ChapterImportService
             throw new DirectoryNotFoundException($"Folder does not exist: {folderPath}");
         }
 
-        var allFiles = Directory
-            .EnumerateFiles(folderPath)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var allFiles = Directory.EnumerateFiles(folderPath);
 
         return ImportFilesWithResult(allFiles, folderPath);
     }
@@ -54,7 +51,9 @@ public sealed class ChapterImportService
 
     private ImportResult ImportFilesWithResult(IEnumerable<string> filePaths, string? noProcessedFilesSourcePath)
     {
-        var files = filePaths.ToList();
+        var files = filePaths
+            .Order(NaturalFileNameComparer.OrdinalIgnoreCase)
+            .ToList();
         int supportedFileCount = files.Count(IsSupportedFile);
         var project = new BookProject();
         var warnings = new List<ImportWarning>();
@@ -225,14 +224,24 @@ public sealed class ChapterImportService
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
 
-        var titleResult = DetectTitle(rawText, path, extension);
+        HtmlDocument? sanitizedHtmlDocument = null;
         string htmlBody = extension switch
         {
             ".txt" => PlainTextToHtml(rawText),
             ".md" or ".markdown" => Markdown.ToHtml(rawText),
-            ".html" or ".htm" => ExtractReadableHtml(rawText, path, warnings, auditLog),
+            ".html" or ".htm" => ExtractReadableHtml(rawText, path, warnings, auditLog, out sanitizedHtmlDocument),
             _ => PlainTextToHtml(rawText)
         };
+        var titleResult = ChapterTitleDetector.Detect(rawText, path, extension, sanitizedHtmlDocument);
+
+        AddAuditEvent(
+            auditLog,
+            ImportAuditEventType.ChapterTitleDetected,
+            ImportAuditSeverity.Info,
+            titleResult.UsedFilename
+                ? "No clear chapter title detected; used the filename."
+                : "Chapter title detected.",
+            path);
 
         if (GetReadableTextLength(rawText, extension) < ShortContentThreshold)
         {
@@ -261,36 +270,6 @@ public sealed class ChapterImportService
         };
     }
 
-    private static TitleDetectionResult DetectTitle(string rawText, string path, string extension)
-    {
-        if (extension is ".html" or ".htm")
-        {
-            var document = new HtmlDocument();
-            document.LoadHtml(rawText);
-
-            string? heading = document.DocumentNode
-                .SelectSingleNode("//h1 | //h2 | //title")
-                ?.InnerText;
-
-            if (!string.IsNullOrWhiteSpace(heading))
-            {
-                return new TitleDetectionResult(NormalizeWhitespace(WebUtility.HtmlDecode(heading)), false);
-            }
-        }
-
-        string? firstMeaningfulLine = rawText
-            .Split('\n')
-            .Select(line => line.Trim().TrimStart('#').Trim())
-            .FirstOrDefault(line => !string.IsNullOrWhiteSpace(line));
-
-        if (!string.IsNullOrWhiteSpace(firstMeaningfulLine) && firstMeaningfulLine.Length <= 120)
-        {
-            return new TitleDetectionResult(NormalizeWhitespace(firstMeaningfulLine), false);
-        }
-
-        return new TitleDetectionResult(Path.GetFileNameWithoutExtension(path), true);
-    }
-
     private static string PlainTextToHtml(string text)
     {
         var paragraphs = text
@@ -306,7 +285,8 @@ public sealed class ChapterImportService
         string html,
         string path,
         List<ImportWarning> warnings,
-        List<ImportAuditEvent> auditLog)
+        List<ImportAuditEvent> auditLog,
+        out HtmlDocument sanitizedDocument)
     {
         var document = new HtmlDocument();
         document.LoadHtml(html);
@@ -314,6 +294,7 @@ public sealed class ChapterImportService
         int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
         var sanitization = HtmlChapterSanitizer.Sanitize(document);
         RemoveNodes(document, ExtraCleanupXPath);
+        sanitizedDocument = document;
 
         HtmlNode? bestNode = FindBestContentNode(document);
 
@@ -438,8 +419,6 @@ public sealed class ChapterImportService
 
         return NormalizeWhitespace(rawText).Length;
     }
-
-    private sealed record TitleDetectionResult(string Title, bool UsedFilename);
 
     private sealed record HtmlExtractionResult(string Html, int RemovedNodeCount);
 
