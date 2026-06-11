@@ -198,6 +198,172 @@ public sealed class ChapterImportServiceTests
     }
 
     [Fact]
+    public void ImportFolderWithResult_ShouldBuildPreviewItemsInNaturalChapterOrder()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempFolder, "chapter10.txt"), "Chapter 10\n\nThe tenth chapter imports.");
+            File.WriteAllText(Path.Combine(tempFolder, "chapter2.txt"), "Chapter 2\n\nThe second chapter imports.");
+            File.WriteAllText(Path.Combine(tempFolder, "chapter1.txt"), "Chapter 1\n\nThe first chapter imports.");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFolderWithResult(tempFolder);
+
+            Assert.Equal(["Chapter 1", "Chapter 2", "Chapter 10"], result.Preview.ImportedChapters.Select(item => item.Title));
+            Assert.Equal([1, 2, 3], result.Preview.ImportedChapters.Select(item => item.Order));
+            Assert.Equal(["chapter1.txt", "chapter2.txt", "chapter10.txt"], result.Preview.ImportedChapters.Select(item => item.OriginalFileName));
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldShowDetectedTitlesInPreview()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, "001.html");
+            File.WriteAllText(filePath, "<main><h1>The Lantern Door</h1><p>The chapter text remains readable.</p></main>");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([filePath]);
+            var previewItem = result.Preview.ImportedChapters.Single();
+
+            Assert.Equal("The Lantern Door", previewItem.Title);
+            Assert.Equal(ChapterTitleSource.DetectedContent, previewItem.TitleSource);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldShowFilenameFallbackTitlesInPreview()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string filePath = Path.Combine(tempFolder, "bonus_chapter-the-quiet-room.txt");
+            File.WriteAllText(filePath, "The room was quiet, and the story began without a visible chapter heading.");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([filePath]);
+            var previewItem = result.Preview.ImportedChapters.Single();
+
+            Assert.Equal("Bonus Chapter The Quiet Room", previewItem.Title);
+            Assert.Equal(ChapterTitleSource.FilenameFallback, previewItem.TitleSource);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFilesWithResult_ShouldIncludeOriginalFileNamesAndSourceFormatsInPreview()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            string txtPath = Path.Combine(tempFolder, "001.txt");
+            string markdownPath = Path.Combine(tempFolder, "002.markdown");
+            string htmlPath = Path.Combine(tempFolder, "003.HTML");
+
+            File.WriteAllText(txtPath, "Chapter One\n\nThe first chapter imports.");
+            File.WriteAllText(markdownPath, "# Chapter Two\n\nThe second chapter imports.");
+            File.WriteAllText(htmlPath, "<main><h1>Chapter Three</h1><p>The third chapter imports.</p></main>");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFilesWithResult([htmlPath, markdownPath, txtPath]);
+
+            Assert.Equal(["001.txt", "002.markdown", "003.HTML"], result.Preview.ImportedChapters.Select(item => item.OriginalFileName));
+            Assert.Equal([".txt", ".markdown", ".html"], result.Preview.ImportedChapters.Select(item => item.SourceFormat));
+            Assert.Equal([txtPath, markdownPath, htmlPath], result.Preview.ImportedChapters.Select(item => item.SourcePath));
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFolderWithResult_ShouldIncludeSkippedFilesReasonsAndCountsInPreview()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempFolder, "001.txt"), "Chapter One\n\nThe valid chapter imports.");
+            File.WriteAllText(Path.Combine(tempFolder, "002.txt"), "");
+            File.WriteAllText(Path.Combine(tempFolder, "notes.csv"), "not a chapter");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFolderWithResult(tempFolder);
+
+            Assert.Equal(1, result.Preview.ImportedCount);
+            Assert.Equal(2, result.Preview.SkippedCount);
+            Assert.Contains(result.Preview.SkippedFiles, skipped => skipped.FileName == "002.txt" && skipped.Reason.Contains("empty", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(result.Preview.SkippedFiles, skipped => skipped.FileName == "notes.csv" && skipped.Reason.Contains("Unsupported file extension"));
+            Assert.Equal(result.Report.SkippedCount, result.Preview.SkippedCount);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ImportFolderWithResult_ShouldProduceUsefulPreviewForMixedValidAndInvalidImports()
+    {
+        string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempFolder);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempFolder, "chapter10.md"), "# Chapter 10\n\nThe tenth chapter imports.");
+            File.WriteAllText(Path.Combine(tempFolder, "chapter2.txt"), "");
+            File.WriteAllText(Path.Combine(tempFolder, "chapter1.html"), "<main><h1>Chapter 1</h1><p>The first chapter imports.</p></main>");
+            File.WriteAllText(Path.Combine(tempFolder, "cover.jpg"), "not a chapter");
+
+            var service = new ChapterImportService();
+
+            var result = service.ImportFolderWithResult(tempFolder);
+
+            Assert.Equal(2, result.Preview.ImportedCount);
+            Assert.Equal(2, result.Preview.SkippedCount);
+            Assert.Equal(["Chapter 1", "Chapter 10"], result.Preview.ImportedChapters.Select(item => item.Title));
+            Assert.Equal(["chapter1.html", "chapter10.md"], result.Preview.ImportedChapters.Select(item => item.OriginalFileName));
+            Assert.Contains(result.Preview.SkippedFiles, skipped => skipped.FileName == "chapter2.txt");
+            Assert.Contains(result.Preview.SkippedFiles, skipped => skipped.FileName == "cover.jpg");
+            Assert.Equal(result.Report.SuccessfullyProcessed, result.Preview.ImportedCount);
+            Assert.Equal(result.Report.SkippedCount, result.Preview.SkippedCount);
+        }
+        finally
+        {
+            Directory.Delete(tempFolder, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ImportFolderWithResult_ShouldKeepValidationReportAndAuditBehaviorWithSortedImports()
     {
         string tempFolder = Path.Combine(Path.GetTempPath(), $"webnovelpack-test-{Guid.NewGuid():N}");

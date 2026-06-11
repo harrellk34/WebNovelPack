@@ -7,4 +7,5 @@ public sealed class Chapter
     public string SourcePath { get; set; } = "";
     public string HtmlBody { get; set; } = "";
     public int Order { get; set; }
+    public ChapterTitleSource TitleSource { get; set; } = ChapterTitleSource.DetectedContent;
 }

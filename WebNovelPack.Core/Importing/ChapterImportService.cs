@@ -136,11 +136,14 @@ public sealed class ChapterImportService
             ImportAuditSeverity.Info,
             $"Import completed with {report.SuccessfullyProcessed} imported and {report.SkippedCount} skipped file(s).");
 
+        var preview = BuildPreview(project, report);
+
         return new ImportResult
         {
             Project = project,
             Warnings = warnings,
             Report = report,
+            Preview = preview,
             AuditLog = auditLog,
             SupportedFileCount = supportedFileCount,
             SkippedFileCount = report.SkippedCount
@@ -266,7 +269,30 @@ public sealed class ChapterImportService
             Title = titleResult.Title,
             SourcePath = path,
             HtmlBody = htmlBody,
-            Order = order
+            Order = order,
+            TitleSource = titleResult.UsedFilename
+                ? ChapterTitleSource.FilenameFallback
+                : ChapterTitleSource.DetectedContent
+        };
+    }
+
+    private static ImportPreviewSummary BuildPreview(BookProject project, PackagingReport report)
+    {
+        return new ImportPreviewSummary
+        {
+            ImportedChapters = project.Chapters
+                .OrderBy(chapter => chapter.Order)
+                .Select(chapter => new ImportPreviewItem
+                {
+                    Order = chapter.Order,
+                    Title = chapter.Title,
+                    SourcePath = chapter.SourcePath,
+                    OriginalFileName = Path.GetFileName(chapter.SourcePath),
+                    SourceFormat = Path.GetExtension(chapter.SourcePath).ToLowerInvariant(),
+                    TitleSource = chapter.TitleSource
+                })
+                .ToList(),
+            SkippedFiles = report.SkippedFiles.ToList()
         };
     }
 
