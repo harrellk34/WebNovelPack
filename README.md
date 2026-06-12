@@ -12,18 +12,20 @@ Current features:
 - Avalonia desktop app setup
 - Core library and test project setup
 - Basic chapter import for `.txt`, `.md`, and `.html` files
+- Natural chapter sorting by filename
+- Chapter title detection from text, Markdown, and HTML files
+- Readable fallback titles based on file names
 - Import validation for missing, empty, unsupported, unreadable, or duplicate files
 - Import report showing processed and skipped files
 - Import audit log for traceability
-- Basic UI feedback for import results
 - HTML sanitization for imported chapter files
 - Safe EPUB output path validation for future export support
-- xUnit tests for import, validation, sanitization, audit logging, and output path handling
+- Basic UI feedback for import results
+- xUnit tests for import, validation, sanitization, ordering, title detection, audit logging, and output path handling
 
 ## Planned Features
 
-- Sort chapters by filename
-- Detect chapter titles
+- Preview the imported chapter list before export
 - Edit and reorder chapters
 - Add book metadata
 - Export chapters as a single EPUB
@@ -31,4 +33,4 @@ Current features:
 
 ## Notes
 
-Right now the app can import and validate chapter files, but EPUB export is not finished yet.
+Right now the app can import, validate, clean, sort, and title chapter files, but EPUB export is not finished yet.

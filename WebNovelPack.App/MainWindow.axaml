@@ -17,16 +17,22 @@
         </StackPanel>
 
         <Grid Grid.Row="1"
-              ColumnDefinitions="2*,*"
+              ColumnDefinitions="2*,*,*"
               Margin="0,16,0,0"
               ColumnSpacing="16">
             <StackPanel Grid.Column="0" Spacing="8">
-                <TextBlock Text="Chapters"
+                <TextBlock Text="Import Preview"
                            FontWeight="SemiBold" />
                 <ListBox Name="ChapterList" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Spacing="8">
+                <TextBlock Text="Skipped Files"
+                           FontWeight="SemiBold" />
+                <ListBox Name="SkippedFilesList" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="8">
                 <TextBlock Text="Warnings"
                            FontWeight="SemiBold" />
                 <ListBox Name="WarningsList" />

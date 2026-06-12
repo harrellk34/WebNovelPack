@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using WebNovelPack.Core.Importing;
+using WebNovelPack.Core.Models;
 using System;
 using System.Linq;
 
@@ -39,11 +40,14 @@ public partial class MainWindow : Window
         try
         {
             var result = _chapterImportService.ImportFolderWithResult(folderPath);
-            var project = result.Project;
 
-            ChapterList.ItemsSource = project.Chapters
+            ChapterList.ItemsSource = result.Preview.ImportedChapters
                 .OrderBy(chapter => chapter.Order)
-                .Select(chapter => $"{chapter.Order}. {chapter.Title}")
+                .Select(FormatPreviewItem)
+                .ToList();
+
+            SkippedFilesList.ItemsSource = result.Preview.SkippedFiles
+                .Select(FormatSkippedFile)
                 .ToList();
 
             WarningsList.ItemsSource = result.Warnings
@@ -57,7 +61,23 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = $"Import failed: {ex.Message}";
+            ChapterList.ItemsSource = null;
+            SkippedFilesList.ItemsSource = null;
             WarningsList.ItemsSource = null;
         }
+    }
+
+    private static string FormatPreviewItem(ImportPreviewItem item)
+    {
+        string format = string.IsNullOrWhiteSpace(item.SourceFormat)
+            ? ""
+            : $" [{item.SourceFormat}]";
+
+        return $"{item.Order}. {item.Title} - {item.OriginalFileName}{format}";
+    }
+
+    private static string FormatSkippedFile(SkippedFileReport skippedFile)
+    {
+        return $"{skippedFile.FileName} - {skippedFile.Reason}";
     }
 }
