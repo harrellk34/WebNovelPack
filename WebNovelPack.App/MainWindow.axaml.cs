@@ -10,10 +10,13 @@ namespace WebNovelPack.App;
 public partial class MainWindow : Window
 {
     private readonly ChapterImportService _chapterImportService = new();
+    private BookProject _currentProject = new();
+    private ImportResult? _currentImportResult;
 
     public MainWindow()
     {
         InitializeComponent();
+        LoadMetadataFields(_currentProject.Metadata);
     }
 
     private async void ImportFolderButton_Click(object? sender, RoutedEventArgs e)
@@ -40,6 +43,10 @@ public partial class MainWindow : Window
         try
         {
             var result = _chapterImportService.ImportFolderWithResult(folderPath);
+            result.Project.Metadata = _currentProject.Metadata;
+            _currentProject = result.Project;
+            _currentImportResult = result;
+            LoadMetadataFields(_currentProject.Metadata);
 
             ChapterList.ItemsSource = result.Preview.ImportedChapters
                 .OrderBy(chapter => chapter.Order)
@@ -64,7 +71,46 @@ public partial class MainWindow : Window
             ChapterList.ItemsSource = null;
             SkippedFilesList.ItemsSource = null;
             WarningsList.ItemsSource = null;
+            _currentImportResult = null;
         }
+    }
+
+    private void SaveMetadataButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var candidate = new BookMetadata
+        {
+            Title = TitleTextBox.Text ?? "",
+            Author = AuthorTextBox.Text ?? "",
+            Language = LanguageTextBox.Text ?? "",
+            Description = DescriptionTextBox.Text ?? "",
+            Identifier = IdentifierTextBox.Text
+        };
+
+        var result = _currentProject.UpdateMetadata(candidate);
+
+        if (!result.IsValid)
+        {
+            MetadataStatusText.Text = result.Message;
+            return;
+        }
+
+        if (_currentImportResult is not null)
+        {
+            _currentImportResult.Project.Metadata = _currentProject.Metadata;
+        }
+
+        LoadMetadataFields(_currentProject.Metadata);
+        MetadataStatusText.Text = "Metadata saved.";
+    }
+
+    private void LoadMetadataFields(BookMetadata metadata)
+    {
+        TitleTextBox.Text = metadata.Title;
+        AuthorTextBox.Text = metadata.Author;
+        LanguageTextBox.Text = metadata.Language;
+        DescriptionTextBox.Text = metadata.Description;
+        IdentifierTextBox.Text = metadata.Identifier ?? "";
+        MetadataStatusText.Text = "";
     }
 
     private static string FormatPreviewItem(ImportPreviewItem item)
