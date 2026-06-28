@@ -6,14 +6,28 @@
         Height="600">
 
     <Grid RowDefinitions="Auto,Auto,*" Margin="16">
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
-            <Button Name="ImportFolderButton"
-                    Content="Import Chapter Folder"
-                    Click="ImportFolderButton_Click" />
+        <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Name="ImportFolderButton"
+                        Content="Import Chapter Folder"
+                        Click="ImportFolderButton_Click" />
 
-            <TextBlock Name="StatusText"
-                       VerticalAlignment="Center"
-                       Text="No folder imported yet." />
+                <Button Name="ExportEpubButton"
+                        Content="Export EPUB"
+                        Click="ExportEpubButton_Click"
+                        IsEnabled="False" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Name="StatusText"
+                           VerticalAlignment="Center"
+                           Text="No folder imported yet."
+                           TextWrapping="Wrap" />
+                <TextBlock Name="ExportStatusText"
+                           VerticalAlignment="Center"
+                           Text=""
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="1"

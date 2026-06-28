@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using WebNovelPack.Core.Exporting;
 using WebNovelPack.Core.Importing;
 using WebNovelPack.Core.Models;
 using System;
@@ -10,6 +11,7 @@ namespace WebNovelPack.App;
 public partial class MainWindow : Window
 {
     private readonly ChapterImportService _chapterImportService = new();
+    private readonly EpubExportService _epubExportService = new();
     private BookProject _currentProject = new();
     private ImportResult? _currentImportResult;
 
@@ -64,14 +66,64 @@ public partial class MainWindow : Window
                 .ToList();
 
             StatusText.Text = $"Discovered {result.Report.TotalFilesDiscovered} file(s); imported {result.Report.SuccessfullyProcessed}; skipped {result.Report.SkippedCount}.";
+            ExportEpubButton.IsEnabled = _currentProject.Chapters.Count > 0;
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Import failed: {ex.Message}";
+            ExportStatusText.Text = string.Empty;
             ChapterList.ItemsSource = null;
             SkippedFilesList.ItemsSource = null;
             WarningsList.ItemsSource = null;
             _currentImportResult = null;
+            ExportEpubButton.IsEnabled = false;
+        }
+    }
+
+    private async void ExportEpubButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentProject.Chapters.Count == 0)
+        {
+            ExportStatusText.Text = "Cannot export EPUB because no chapters have been imported.";
+            return;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new()
+        {
+            Title = "Select EPUB output folder",
+            AllowMultiple = false
+        });
+
+        if (folders.Count == 0)
+        {
+            ExportStatusText.Text = "Export canceled.";
+            return;
+        }
+
+        string? outputFolder = folders[0].Path.LocalPath;
+
+        if (string.IsNullOrWhiteSpace(outputFolder))
+        {
+            ExportStatusText.Text = "Could not read selected output folder path.";
+            return;
+        }
+
+        try
+        {
+            var exportResult = _epubExportService.Export(_currentProject, outputFolder, null);
+
+            if (exportResult.IsSuccess)
+            {
+                ExportStatusText.Text = $"Export successful: {exportResult.OutputPath}";
+            }
+            else
+            {
+                ExportStatusText.Text = exportResult.Message ?? "Export failed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ExportStatusText.Text = $"Unexpected export failure: {ex.Message}";
         }
     }
 
