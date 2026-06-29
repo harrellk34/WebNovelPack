@@ -862,6 +862,37 @@ public sealed class ChapterImportServiceTests
         }
     }
 
+    [Fact]
+    public void NormalizeEditedChapterContent_WithPlainText_ShouldConvertToParagraphHtml()
+    {
+        var service = new ChapterImportService();
+
+        string html = service.NormalizeEditedChapterContent("Edited line one.\n\nEdited line two.");
+
+        Assert.Contains("<p>Edited line one.</p>", html);
+        Assert.Contains("<p>Edited line two.</p>", html);
+    }
+
+    [Fact]
+    public void NormalizeEditedChapterContent_WithHtml_ShouldReuseHtmlSanitization()
+    {
+        var service = new ChapterImportService();
+
+        string html = service.NormalizeEditedChapterContent(
+            """
+            <main>
+                <h1 onclick="bad()">Edited Chapter</h1>
+                <p>Edited content remains.</p>
+                <script>alert('unsafe')</script>
+            </main>
+            """);
+
+        Assert.Contains("Edited Chapter", html);
+        Assert.Contains("Edited content remains.", html);
+        Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onclick", html, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ImportSingleChapterBody(string extension, string content)
     {
         return ImportSingleChapter(extension, content).HtmlBody;

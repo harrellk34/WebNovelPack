@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Text;
-using System.Xml;
 using WebNovelPack.Core.Models;
 
 namespace WebNovelPack.Core.Exporting;
@@ -63,7 +62,6 @@ public sealed class EpubExportService
                 writer.Write(GetContainerXml());
             }
 
-            var contentEntries = new List<(string Path, string Content)>();
             var chapterEntries = new List<(string FileName, string Content)>();
 
             for (int index = 0; index < chapters.Count; index++)
@@ -72,7 +70,6 @@ public sealed class EpubExportService
                 var chapterFileName = $"chapter-{index + 1}.xhtml";
                 var chapterContent = BuildChapterXhtml(chapter);
                 chapterEntries.Add((chapterFileName, chapterContent));
-                contentEntries.Add((chapterFileName, chapterContent));
             }
 
             var navigationContent = BuildNavigationXhtml(chapters.Select(chapter => chapter.Title).ToList());

@@ -49,6 +49,18 @@ public sealed class ChapterImportService
         return ImportFilesWithResult(filePaths, null);
     }
 
+    public string NormalizeEditedChapterContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return "";
+        }
+
+        return LooksLikeHtml(content)
+            ? NormalizeHtmlFragment(content).Html
+            : PlainTextToHtml(content);
+    }
+
     private ImportResult ImportFilesWithResult(IEnumerable<string> filePaths, string? noProcessedFilesSourcePath)
     {
         var files = filePaths
@@ -317,9 +329,7 @@ public sealed class ChapterImportService
         var document = new HtmlDocument();
         document.LoadHtml(html);
 
-        int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
-        var sanitization = HtmlChapterSanitizer.Sanitize(document);
-        RemoveNodes(document, ExtraCleanupXPath);
+        int removedNodeCount = RemoveReadingChromeAndUnsafeHtml(document);
         sanitizedDocument = document;
 
         HtmlNode? bestNode = FindBestContentNode(document);
@@ -328,7 +338,6 @@ public sealed class ChapterImportService
 
         var normalized = NormalizeHtmlFragment(cleaned);
         removedNodeCount += normalized.RemovedNodeCount;
-        removedNodeCount += sanitization.TotalRemoved;
 
         AddAuditEvent(
             auditLog,
@@ -417,16 +426,19 @@ public sealed class ChapterImportService
         var document = new HtmlDocument();
         document.LoadHtml(html);
 
-        int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
-        var sanitization = HtmlChapterSanitizer.Sanitize(document);
-        RemoveNodes(document, ExtraCleanupXPath);
+        int removedNodeCount = RemoveReadingChromeAndUnsafeHtml(document);
 
-        return new HtmlExtractionResult(document.DocumentNode.InnerHtml.Trim(), removedNodeCount + sanitization.TotalRemoved);
+        return new HtmlExtractionResult(document.DocumentNode.InnerHtml.Trim(), removedNodeCount);
     }
 
     private static string NormalizeWhitespace(string value)
     {
         return string.Join(" ", value.Split(default(string[]), StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool LooksLikeHtml(string value)
+    {
+        return value.Contains('<') && value.Contains('>');
     }
 
     private static int GetReadableTextLength(string rawText, string extension)
@@ -436,14 +448,21 @@ public sealed class ChapterImportService
             var document = new HtmlDocument();
             document.LoadHtml(rawText);
 
-            RemoveNodes(document, ContentCleanupXPath);
-            HtmlChapterSanitizer.Sanitize(document);
-            RemoveNodes(document, ExtraCleanupXPath);
+            RemoveReadingChromeAndUnsafeHtml(document);
 
             return NormalizeWhitespace(WebUtility.HtmlDecode(document.DocumentNode.InnerText)).Length;
         }
 
         return NormalizeWhitespace(rawText).Length;
+    }
+
+    private static int RemoveReadingChromeAndUnsafeHtml(HtmlDocument document)
+    {
+        int removedNodeCount = RemoveNodes(document, ContentCleanupXPath);
+        var sanitization = HtmlChapterSanitizer.Sanitize(document);
+        RemoveNodes(document, ExtraCleanupXPath);
+
+        return removedNodeCount + sanitization.TotalRemoved;
     }
 
     private sealed record HtmlExtractionResult(string Html, int RemovedNodeCount);

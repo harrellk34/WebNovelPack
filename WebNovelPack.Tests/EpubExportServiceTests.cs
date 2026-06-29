@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Xml.Linq;
 using WebNovelPack.Core.Exporting;
 using WebNovelPack.Core.Models;
 

@@ -2,122 +2,334 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="WebNovelPack.App.MainWindow"
         Title="WebNovelPack"
-        Width="900"
-        Height="600">
+        Width="1040"
+        Height="720"
+        MinWidth="820"
+        MinHeight="560"
+        Background="#F6F7F4">
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="16">
-        <StackPanel Grid.Row="0" Orientation="Vertical" Spacing="6">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Name="ImportFolderButton"
-                        Content="Import Chapter Folder"
-                        Click="ImportFolderButton_Click" />
-
-                <Button Name="ExportEpubButton"
-                        Content="Export EPUB"
-                        Click="ExportEpubButton_Click"
-                        IsEnabled="False" />
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24"
+                    Spacing="18">
+            <StackPanel Spacing="4">
+                <TextBlock Text="WebNovelPack"
+                           FontSize="28"
+                           FontWeight="SemiBold"
+                           Foreground="#202426" />
+                <TextBlock Text="Package a folder of chapters into a clean EPUB."
+                           FontSize="14"
+                           Foreground="#626A70" />
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <TextBlock Name="StatusText"
-                           VerticalAlignment="Center"
-                           Text="No folder imported yet."
-                           TextWrapping="Wrap" />
-                <TextBlock Name="ExportStatusText"
-                           VerticalAlignment="Center"
-                           Text=""
-                           TextWrapping="Wrap" />
-            </StackPanel>
+            <Border Background="#FFFFFF"
+                    BorderBrush="#D9DDD6"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="18">
+                <Grid ColumnDefinitions="*,Auto"
+                      RowDefinitions="Auto,Auto"
+                      ColumnSpacing="16"
+                      RowSpacing="10">
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="0"
+                                Spacing="4">
+                        <TextBlock Text="1. Import chapters"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#202426" />
+                        <TextBlock Text="Supported: TXT, Markdown, and HTML chapter files."
+                                   Foreground="#626A70"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Button Name="ImportFolderButton"
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            MinWidth="170"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Padding="16,9"
+                            Background="#1D6F5F"
+                            Foreground="White"
+                            Content="Import Chapter Folder"
+                            Click="ImportFolderButton_Click" />
+
+                    <TextBlock Name="ImportStatusText"
+                               Grid.Row="1"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="2"
+                               Text="No folder imported yet."
+                               Foreground="#485158"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <Border Background="#FFFFFF"
+                    BorderBrush="#D9DDD6"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="18">
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="16">
+                        <StackPanel Grid.Column="0"
+                                    Spacing="4">
+                            <TextBlock Text="2. Review chapter order and import results"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#202426" />
+                            <TextBlock Text="Chapters are sorted naturally by filename before export."
+                                       Foreground="#626A70"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <TextBlock Name="ChapterCountText"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#1D6F5F"
+                                   Text="0 chapters" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="2*,*,*"
+                          ColumnSpacing="14">
+                        <StackPanel Grid.Column="0"
+                                    Spacing="6">
+                            <TextBlock Text="Chapter preview"
+                                       FontWeight="SemiBold"
+                                       Foreground="#202426" />
+                            <ListBox Name="ChapterList"
+                                     MinHeight="190"
+                                     MaxHeight="280"
+                                     SelectionChanged="ChapterList_SelectionChanged" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1"
+                                    Spacing="6">
+                            <TextBlock Text="Skipped files"
+                                       FontWeight="SemiBold"
+                                       Foreground="#202426" />
+                            <ListBox Name="SkippedFilesList"
+                                     MinHeight="190"
+                                     MaxHeight="280" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2"
+                                    Spacing="6">
+                            <TextBlock Text="Import warnings"
+                                       FontWeight="SemiBold"
+                                       Foreground="#202426" />
+                            <ListBox Name="WarningsList"
+                                     MinHeight="190"
+                                     MaxHeight="280" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="10">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Edit selected chapter"
+                                       FontWeight="SemiBold"
+                                       Foreground="#202426" />
+                            <TextBlock Name="ChapterEditorEmptyText"
+                                       Text="Select an imported chapter to edit its title and content."
+                                       Foreground="#626A70"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Grid Name="ChapterEditorFieldsPanel"
+                              ColumnDefinitions="Auto,*"
+                              RowDefinitions="Auto,Auto,Auto"
+                              ColumnSpacing="12"
+                              RowSpacing="10"
+                              IsVisible="False">
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       VerticalAlignment="Center"
+                                       Text="Title"
+                                       Foreground="#30373B" />
+                            <TextBox Name="ChapterTitleTextBox"
+                                     Grid.Row="0"
+                                     Grid.Column="1" />
+
+                            <TextBlock Grid.Row="1"
+                                      Grid.Column="0"
+                                      VerticalAlignment="Top"
+                                      Text="Content"
+                                       Foreground="#30373B" />
+                            <TextBox Name="ChapterContentTextBox"
+                                     Grid.Row="1"
+                                     Grid.Column="1"
+                                     MinHeight="150"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap" />
+
+                            <StackPanel Grid.Row="2"
+                                        Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        Spacing="12">
+                                <Button Name="SaveChapterChangesButton"
+                                        MinWidth="170"
+                                        Padding="14,8"
+                                        Content="Save Chapter Changes"
+                                        Click="SaveChapterChangesButton_Click"
+                                        IsEnabled="False" />
+                                <TextBlock Name="ChapterEditStatusText"
+                                           VerticalAlignment="Center"
+                                           Foreground="#485158"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#FFFFFF"
+                    BorderBrush="#D9DDD6"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="18">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="3. Book details"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#202426" />
+                        <TextBlock Text="Title and author are required for EPUB export."
+                                   Foreground="#626A70"
+                                   TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="*,Auto"
+                              Background="#EEF6F3"
+                              ColumnSpacing="12"
+                              Margin="0,4,0,4">
+                            <TextBlock Grid.Column="0"
+                                       Margin="10"
+                                       VerticalAlignment="Center"
+                                       Text="Save book details before exporting."
+                                       Foreground="#485158"
+                                       TextWrapping="Wrap" />
+                            <Button Name="SaveMetadataButton"
+                                    Grid.Column="1"
+                                    MinWidth="150"
+                                    Margin="10"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Padding="14,8"
+                                    Background="#1D6F5F"
+                                    Foreground="White"
+                                    Content="Save Metadata"
+                                    Click="SaveMetadataButton_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="Auto,*,Auto,*"
+                          RowDefinitions="Auto,Auto,Auto,Auto"
+                          ColumnSpacing="12"
+                          RowSpacing="10">
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Title"
+                                   Foreground="#30373B" />
+                        <TextBox Name="TitleTextBox"
+                                 Grid.Row="0"
+                                 Grid.Column="1" />
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   Text="Author"
+                                   Foreground="#30373B" />
+                        <TextBox Name="AuthorTextBox"
+                                 Grid.Row="0"
+                                 Grid.Column="3" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Language"
+                                   Foreground="#30373B" />
+                        <TextBox Name="LanguageTextBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   VerticalAlignment="Center"
+                                   Text="Identifier"
+                                   Foreground="#30373B" />
+                        <TextBox Name="IdentifierTextBox"
+                                 Grid.Row="1"
+                                 Grid.Column="3" />
+
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Top"
+                                   Text="Description"
+                                   Foreground="#30373B" />
+                        <TextBox Name="DescriptionTextBox"
+                                 Grid.Row="2"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="3"
+                                 MinHeight="76"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap" />
+
+                        <TextBlock Name="MetadataStatusText"
+                                   Grid.Row="3"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="3"
+                                   VerticalAlignment="Center"
+                                   Foreground="#485158"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#FFFFFF"
+                    BorderBrush="#D9DDD6"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="18">
+                <Grid ColumnDefinitions="*,Auto"
+                      RowDefinitions="Auto,Auto"
+                      ColumnSpacing="16"
+                      RowSpacing="10">
+                    <StackPanel Grid.Row="0"
+                                Grid.Column="0"
+                                Spacing="4">
+                        <TextBlock Text="4. Export EPUB"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#202426" />
+                        <TextBlock Name="ExportReadinessText"
+                                   Text="Import chapters before exporting."
+                                   Foreground="#626A70"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Button Name="ExportEpubButton"
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            MinWidth="140"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Padding="16,9"
+                            Background="#1D6F5F"
+                            Foreground="White"
+                            Content="Export EPUB"
+                            Click="ExportEpubButton_Click"
+                            IsEnabled="False" />
+
+                    <TextBlock Name="ExportStatusText"
+                               Grid.Row="1"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="2"
+                               Foreground="#485158"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </Border>
         </StackPanel>
-
-        <StackPanel Grid.Row="1"
-                    Margin="0,16,0,0"
-                    Spacing="8">
-            <TextBlock Text="Book Metadata"
-                       FontWeight="SemiBold" />
-
-            <Grid ColumnDefinitions="Auto,*,Auto,*"
-                  RowDefinitions="Auto,Auto,Auto,Auto"
-                  ColumnSpacing="12"
-                  RowSpacing="8">
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           VerticalAlignment="Center"
-                           Text="Title" />
-                <TextBox Name="TitleTextBox"
-                         Grid.Row="0"
-                         Grid.Column="1" />
-
-                <TextBlock Grid.Row="0"
-                           Grid.Column="2"
-                           VerticalAlignment="Center"
-                           Text="Author" />
-                <TextBox Name="AuthorTextBox"
-                         Grid.Row="0"
-                         Grid.Column="3" />
-
-                <TextBlock Grid.Row="1"
-                           Grid.Column="0"
-                           VerticalAlignment="Center"
-                           Text="Language" />
-                <TextBox Name="LanguageTextBox"
-                         Grid.Row="1"
-                         Grid.Column="1" />
-
-                <TextBlock Grid.Row="1"
-                           Grid.Column="2"
-                           VerticalAlignment="Center"
-                           Text="Identifier" />
-                <TextBox Name="IdentifierTextBox"
-                         Grid.Row="1"
-                         Grid.Column="3" />
-
-                <TextBlock Grid.Row="2"
-                           Grid.Column="0"
-                           VerticalAlignment="Top"
-                           Text="Description" />
-                <TextBox Name="DescriptionTextBox"
-                         Grid.Row="2"
-                         Grid.Column="1"
-                         Grid.ColumnSpan="3"
-                         MinHeight="64"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap" />
-
-                <Button Name="SaveMetadataButton"
-                        Grid.Row="3"
-                        Grid.Column="1"
-                        Content="Save Metadata"
-                        Click="SaveMetadataButton_Click" />
-                <TextBlock Name="MetadataStatusText"
-                           Grid.Row="3"
-                           Grid.Column="2"
-                           Grid.ColumnSpan="2"
-                           VerticalAlignment="Center" />
-            </Grid>
-        </StackPanel>
-
-        <Grid Grid.Row="2"
-              ColumnDefinitions="2*,*,*"
-              Margin="0,16,0,0"
-              ColumnSpacing="16">
-            <StackPanel Grid.Column="0" Spacing="8">
-                <TextBlock Text="Import Preview"
-                           FontWeight="SemiBold" />
-                <ListBox Name="ChapterList" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1" Spacing="8">
-                <TextBlock Text="Skipped Files"
-                           FontWeight="SemiBold" />
-                <ListBox Name="SkippedFilesList" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="2" Spacing="8">
-                <TextBlock Text="Warnings"
-                           FontWeight="SemiBold" />
-                <ListBox Name="WarningsList" />
-            </StackPanel>
-        </Grid>
-    </Grid>
+    </ScrollViewer>
 </Window>
